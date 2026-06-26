@@ -212,7 +212,7 @@ export default function Home() {
               </filter>
             </defs>
 
-            <g fill="none" stroke="#27303F" strokeWidth="1.6">
+            <g className="wires" fill="none" stroke="#27303F" strokeWidth="1.6">
               <path d="M62 260 H150" />
               <path d="M390 260 H440 V120 H510" />
               <path d="M390 260 H510" />
@@ -279,7 +279,7 @@ export default function Home() {
               </g>
             </a>
 
-            <a href="#contact" className="gnode">
+            <a href="#contact" className="gnode agent">
               <rect x="770" y="226" width="180" height="68" rx="12" fill="#1A140C" stroke="#E8A85C" strokeWidth="1.4" />
               <circle className="pulse" cx="788" cy="244" r="4" fill="#E8A85C" style={{ animationDelay: "0.3s" }} />
               <text className="node-label" x="868" y="252" fontSize="15" fill="#F3C58A" textAnchor="middle">Ask the agent</text>
@@ -287,7 +287,7 @@ export default function Home() {
             </a>
 
             <g data-token>
-              <circle ref={tokenRef} r="5.5" fill="#E8A85C" filter="url(#glow)" cx="50" cy="260" />
+              <circle ref={tokenRef} className="token" r="5.5" fill="#E8A85C" filter="url(#glow)" cx="50" cy="260" />
             </g>
           </svg>
         </div>
