@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 
-const DUR = 2600; // token loop duration (ms)
-
 const ROUTES: Record<string, string> = {
   default: "M50 260 H950",
   experience: "M50 260 H440 V120 H720 V260 H950",
@@ -16,6 +14,9 @@ const NODE_CENTERS: Record<string, { x: number; y: number }> = {
   projects: { x: 580, y: 260 },
   skills: { x: 580, y: 400 },
 };
+
+const SPEED = 0.34; // px per ms — constant token speed
+const SPLIT = 390; // arc length at the branching intersection (x = 440)
 
 type Active = "experience" | "projects" | "skills" | null;
 type Role = { title: string; company: string; dates: string; bullets: string[] };
@@ -35,80 +36,102 @@ export default function Home() {
   const routePathRef = useRef<SVGPathElement>(null);
   const nodeRefs = useRef<Record<string, SVGGElement | null>>({});
 
-  // token animation: locks to a hovered node, otherwise cycles through all three
+  // latest hover, readable inside the animation loop without restarting it
+  const activeRef = useRef<Active>(null);
+  activeRef.current = active;
+
+  // one continuous animation loop — decides its branch at the split point
   useEffect(() => {
     const token = tokenRef.current;
     const routePath = routePathRef.current;
     if (!token || !routePath) return;
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const seq: string[] = active ? [active] : ["experience", "projects", "skills"];
-    let idx = 0;
+    const cycle = ["experience", "projects", "skills"];
 
+    let chosen = "projects";
+    let cycleIdx = 0;
+    let phase: "common" | "branch" = "common";
+    let len = 0;
     let total = 0;
-    let nodeFrac = -1;
-    let activeEl: SVGGElement | null = null;
+    let nodeLen = -1;
+    let lit = false;
 
     const clearLit = () =>
       Object.values(nodeRefs.current).forEach((el) => el && el.classList.remove("lit"));
 
-    const loadRoute = (key: string) => {
-      routePath.setAttribute("d", ROUTES[key] ?? ROUTES.default);
-      total = routePath.getTotalLength();
-      const p0 = routePath.getPointAtLength(0);
-      token.setAttribute("cx", String(p0.x));
-      token.setAttribute("cy", String(p0.y));
-      clearLit();
-      activeEl = nodeRefs.current[key] ?? null;
-      nodeFrac = -1;
+    const computeNodeLen = (key: string) => {
       const c = NODE_CENTERS[key];
-      if (c) {
-        let best = Infinity;
-        const N = 240;
-        for (let i = 0; i <= N; i++) {
-          const pt = routePath.getPointAtLength((i / N) * total);
-          const dist = (pt.x - c.x) ** 2 + (pt.y - c.y) ** 2;
-          if (dist < best) {
-            best = dist;
-            nodeFrac = i / N;
-          }
+      if (!c) return -1;
+      let best = Infinity;
+      let bestLen = -1;
+      const N = 260;
+      for (let i = 0; i <= N; i++) {
+        const l = (i / N) * total;
+        const pt = routePath.getPointAtLength(l);
+        const d = (pt.x - c.x) ** 2 + (pt.y - c.y) ** 2;
+        if (d < best) {
+          best = d;
+          bestLen = l;
         }
       }
+      return bestLen;
     };
 
-    // amber track shows only on an intentional hover
-    if (active) routePath.classList.add("on");
-    else routePath.classList.remove("on");
+    routePath.setAttribute("d", ROUTES.projects);
+    total = routePath.getTotalLength();
+    const p0 = routePath.getPointAtLength(0);
+    token.setAttribute("cx", String(p0.x));
+    token.setAttribute("cy", String(p0.y));
 
-    loadRoute(seq[0]);
     if (reduce) return;
 
     let raf = 0;
-    const start = performance.now();
-    let lastProg = 0;
-    let litThisLoop = false;
+    let prev = performance.now();
 
     const tick = (now: number) => {
-      const prog = ((now - start) % DUR) / DUR;
-      if (prog < lastProg) {
-        litThisLoop = false;
-        if (seq.length > 1) {
-          idx = (idx + 1) % seq.length;
-          loadRoute(seq[idx]);
-        } else {
-          clearLit();
-        }
-      }
-      lastProg = prog;
+      const dt = now - prev;
+      prev = now;
+      len += SPEED * dt;
 
-      const pt = routePath.getPointAtLength(prog * total);
+      // decision happens at the branch intersection
+      if (phase === "common" && len >= SPLIT) {
+        const act = activeRef.current;
+        if (act) {
+          chosen = act;
+        } else {
+          chosen = cycle[cycleIdx];
+          cycleIdx = (cycleIdx + 1) % cycle.length;
+        }
+        routePath.setAttribute("d", ROUTES[chosen] ?? ROUTES.default);
+        total = routePath.getTotalLength();
+        nodeLen = computeNodeLen(chosen);
+        if (act) routePath.classList.add("on");
+        else routePath.classList.remove("on");
+        clearLit();
+        lit = false;
+        phase = "branch";
+      }
+
+      // completed the journey -> loop back along the shared trunk
+      if (len >= total) {
+        len = 0;
+        phase = "common";
+        lit = false;
+        clearLit();
+        routePath.classList.remove("on");
+      }
+
+      const pt = routePath.getPointAtLength(len);
       token.setAttribute("cx", String(pt.x));
       token.setAttribute("cy", String(pt.y));
 
-      if (activeEl && nodeFrac >= 0 && prog >= nodeFrac && !litThisLoop) {
-        activeEl.classList.add("lit");
-        litThisLoop = true;
+      if (phase === "branch" && nodeLen >= 0 && len >= nodeLen && !lit) {
+        const el = nodeRefs.current[chosen];
+        if (el) el.classList.add("lit");
+        lit = true;
       }
+
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -118,7 +141,7 @@ export default function Home() {
       clearLit();
       routePath.classList.remove("on");
     };
-  }, [active]);
+  }, []);
 
   async function toggle(id: "experience" | "projects") {
     if (id === "experience") {

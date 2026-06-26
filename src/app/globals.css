@@ -55,6 +55,7 @@ section{ padding:clamp(56px,9vw,110px) 0; border-top:1px solid var(--border); }
 /* interactive token routing */
 .route{ fill:none; stroke:var(--amber); stroke-width:1.6; opacity:0; transition:opacity .25s; pointer-events:none; }
 .route.on{ opacity:.5; }
+[data-token]{ pointer-events:none; }
 .gnode.active rect{ stroke:var(--amber); }
 .lit rect{ stroke:var(--amber); }
 .lit circle{ fill:var(--amber); }
